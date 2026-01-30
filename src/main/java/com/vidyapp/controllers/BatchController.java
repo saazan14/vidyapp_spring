@@ -44,14 +44,20 @@ public class BatchController {
         return ResponseEntity.ok(updatedBatch);
     }
 
-    @DeleteMapping("/{batchId}")
-    public ResponseEntity<Void> deleteBatch(
+    @DeleteMapping("/{batchId}/{name}")
+    public ResponseEntity<Void> softDeleteBatch(
             @PathVariable int batchId,
-            @RequestParam String name) {
+            @PathVariable String name) {
 
-        batchService.delete(batchId, name);
+        batchService.softDelete(batchId, name);
 
         // Returns 204 No Content
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{batchId}")
+    public ResponseEntity<Void> deleteBatch(@PathVariable int batchId) {
+        batchService.delete(batchId);
         return ResponseEntity.noContent().build();
     }
 }

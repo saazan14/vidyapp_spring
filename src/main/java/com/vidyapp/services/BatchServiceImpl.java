@@ -39,7 +39,7 @@ public class BatchServiceImpl implements BatchService {
     }
 
     @Override
-    public void delete(int batchId, String name) {
+    public void softDelete(int batchId, String name) {
         // 1. Find the batch or throw exception
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new RuntimeException("Batch with ID " + batchId + " not found"));
@@ -52,6 +52,14 @@ public class BatchServiceImpl implements BatchService {
         // 3. Perform Soft Delete
         batch.setActive(false);
         batchRepository.save(batch);
+    }
+
+    @Override
+    public void delete(int batchId) {
+        // 1. Find the batch or throw exception
+        Batch batch = batchRepository.findById(batchId)
+                .orElseThrow(() -> new RuntimeException("Batch with ID " + batchId + " not found"));
+        batchRepository.delete(batch);
     }
 
     @Override
