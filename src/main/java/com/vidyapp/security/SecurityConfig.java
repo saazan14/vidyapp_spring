@@ -1,8 +1,6 @@
 package com.vidyapp.security;
 
-import com.vidyapp.models.AppRole;
-import com.vidyapp.models.Role;
-import com.vidyapp.models.User;
+import com.vidyapp.models.*;
 import com.vidyapp.repositories.RoleRepository;
 import com.vidyapp.repositories.UserRepository;
 import com.vidyapp.security.jwt.AuthEntryPointJwt;
@@ -82,61 +80,106 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // Seed for dev env
+//    // Seed for dev env
+//    @Bean
+//    public CommandLineRunner initData(RoleRepository roleRepository, UserRepository userRepository, PasswordEncoder passwordEncoder) {
+//        return args -> {
+//            Role userRole = roleRepository.findByRoleName(AppRole.ROLE_STUDENT)
+//                    .orElseGet(() -> roleRepository.save(new Role(AppRole.ROLE_STUDENT)));
+//
+//            Role adminRole = roleRepository.findByRoleName(AppRole.ROLE_ADMIN)
+//                    .orElseGet(() -> roleRepository.save(new Role(AppRole.ROLE_ADMIN)));
+//
+//            if (!userRepository.existsByUserName("user")) {
+//                User user1 = new User("user", "user1@example.com",  passwordEncoder.encode("password1"));
+//                user1.setAccountNonLocked(false);
+//                user1.setAccountNonExpired(true);
+//                user1.setCredentialsNonExpired(true);
+//                user1.setEnabled(true);
+//                user1.setCredentialsExpiryDate(LocalDate.now().plusYears(1));
+//                user1.setAccountExpiryDate(LocalDate.now().plusYears(1));
+//                user1.setTwoFactorEnabled(false);
+//                user1.setSignUpMethod("email");
+//                user1.setRole((Role) userRole);
+//                userRepository.save(user1);
+//            }
+//
+//            if (!userRepository.existsByUserName("admin")) {
+//                User admin = new User("admin", "admin@example.com", passwordEncoder.encode("adminPass"));
+//                admin.setAccountNonLocked(true);
+//                admin.setAccountNonExpired(true);
+//                admin.setCredentialsNonExpired(true);
+//                admin.setEnabled(true);
+//                admin.setCredentialsExpiryDate(LocalDate.now().plusYears(1));
+//                admin.setAccountExpiryDate(LocalDate.now().plusYears(1));
+//                admin.setTwoFactorEnabled(false);
+//                admin.setSignUpMethod("email");
+//                admin.setRole((Role) adminRole);
+//                userRepository.save(admin);
+//            }
+//        };
+//    }
+
     @Bean
     public CommandLineRunner initData(RoleRepository roleRepository, UserRepository userRepository, PasswordEncoder passwordEncoder) {
         return args -> {
-            Role userRole = roleRepository.findByRoleName(AppRole.ROLE_USER)
-                    .orElseGet(() -> roleRepository.save(new Role(AppRole.ROLE_USER)));
+            // 1. Ensure Roles exist
+            Role studentRole = roleRepository.findByRoleName(AppRole.ROLE_STUDENT)
+                    .orElseGet(() -> roleRepository.save(new Role(AppRole.ROLE_STUDENT)));
 
             Role adminRole = roleRepository.findByRoleName(AppRole.ROLE_ADMIN)
                     .orElseGet(() -> roleRepository.save(new Role(AppRole.ROLE_ADMIN)));
 
+            // 2. Seed Student User
             if (!userRepository.existsByUserName("user")) {
-                User user1 = new User("user", "user1@example.com",  passwordEncoder.encode("password1"));
-                user1.setAccountNonLocked(false);
-                user1.setAccountNonExpired(true);
-                user1.setCredentialsNonExpired(true);
-                user1.setEnabled(true);
-                user1.setCredentialsExpiryDate(LocalDate.now().plusYears(1));
-                user1.setAccountExpiryDate(LocalDate.now().plusYears(1));
-                user1.setTwoFactorEnabled(false);
-                user1.setSignUpMethod("email");
-                user1.setRole((Role) userRole);
-                userRepository.save(user1);
+                User user1 = new User("user", "user1@example.com", passwordEncoder.encode("password123"));
+                configureDefaults(user1, studentRole);
+                user1.setAccountNonLocked(true); // Changed to true so you can actually log in
+
+                // Initialize Student Profile
+                StudentProfile studentProfile = new StudentProfile();
+                studentProfile.setUser(user1);
+                studentProfile.setRegistration(1L);
+                studentProfile.setAddress("123 Student Street");
+                studentProfile.setPhone("555-0101");
+                studentProfile.setTransport(AppTransport.Bus);
+                studentProfile.setBloodGroup("O+");
+
+                user1.setStudentProfile(studentProfile);
+
+                userRepository.save(user1); // Saves both User and StudentProfile
             }
 
+            // 3. Seed Admin User
             if (!userRepository.existsByUserName("admin")) {
-                User admin = new User("admin", "admin@example.com", passwordEncoder.encode("adminPass"));
-                admin.setAccountNonLocked(true);
-                admin.setAccountNonExpired(true);
-                admin.setCredentialsNonExpired(true);
-                admin.setEnabled(true);
-                admin.setCredentialsExpiryDate(LocalDate.now().plusYears(1));
-                admin.setAccountExpiryDate(LocalDate.now().plusYears(1));
-                admin.setTwoFactorEnabled(false);
-                admin.setSignUpMethod("email");
-                admin.setRole((Role) adminRole);
-                userRepository.save(admin);
+                User admin = new User("admin", "admin@example.com", passwordEncoder.encode("admin123"));
+                configureDefaults(admin, adminRole);
+
+                // Initialize Admin Profile
+                AdminProfile adminProfile = new AdminProfile();
+                adminProfile.setUser(admin);
+                adminProfile.setAddress("456 Admin Headquarters");
+                adminProfile.setPhone("555-9999");
+
+                admin.setAdminProfile(adminProfile);
+
+                userRepository.save(admin); // Saves both User and AdminProfile
             }
         };
     }
 
-//    @Bean
-//    public UserDetailsService userDetailsService(DataSource dataSource) {
-//        JdbcUserDetailsManager  manager = new JdbcUserDetailsManager(dataSource);
-//        if(!manager.userExists("user1")){
-//            manager.createUser(
-//                    User.withUsername("user1").password("{noop}password").roles("USER").build()
-//            );
-//        }
-//        if(!manager.userExists("admin1")){
-//            manager.createUser(
-//                    User.withUsername("admin1").password("{noop}password").roles("ADMIN").build()
-//            );
-//        }
-//        return manager;
-//    }
-
-
+    /**
+     * Helper to reduce boilerplate in the seeder
+     */
+    private void configureDefaults(User user, Role role) {
+        user.setRole(role);
+        user.setAccountNonLocked(true);
+        user.setAccountNonExpired(true);
+        user.setCredentialsNonExpired(true);
+        user.setEnabled(true);
+        user.setCredentialsExpiryDate(LocalDate.now().plusYears(1));
+        user.setAccountExpiryDate(LocalDate.now().plusYears(1));
+        user.setTwoFactorEnabled(false);
+        user.setSignUpMethod("email");
+    }
 }

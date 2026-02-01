@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.validator.constraints.UniqueElements;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,13 +32,13 @@ public class User{
 
     @NotBlank
     @Size(max = 20)
-    @Column(name = "username")
+    @Column(name = "username", unique = true)
     private String userName;
 
     @NotBlank
     @Size(max = 50)
     @Email
-    @Column(name = "email")
+    @Column(name = "email", unique = true)
     private String email;
 
     @Size(max = 120)
@@ -69,6 +70,12 @@ public class User{
 
     @UpdateTimestamp
     private LocalDateTime updatedDate;
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
+    private StudentProfile studentProfile;
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
+    private AdminProfile adminProfile;
 
     public User(String userName, String email, String password) {
         this.userName = userName;

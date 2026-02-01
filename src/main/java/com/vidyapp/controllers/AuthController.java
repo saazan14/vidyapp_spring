@@ -1,9 +1,7 @@
 package com.vidyapp.controllers;
 
+import com.vidyapp.models.*;
 import jakarta.validation.Valid;
-import com.vidyapp.models.AppRole;
-import com.vidyapp.models.Role;
-import com.vidyapp.models.User;
 import com.vidyapp.repositories.RoleRepository;
 import com.vidyapp.repositories.UserRepository;
 import com.vidyapp.security.jwt.JwtUtils;
@@ -87,50 +85,135 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+//    @PostMapping("/public/signup")
+//    public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
+//        if (userRepository.existsByUserName(signUpRequest.getUsername())) {
+//            return ResponseEntity.badRequest().body(new MessageResponse("Error: Username is already taken!"));
+//        }
+//
+//        if (userRepository.existsByEmail(signUpRequest.getEmail())) {
+//            return ResponseEntity.badRequest().body(new MessageResponse("Error: Email is already in use!"));
+//        }
+//
+//        // Create new user's account
+//        User user = new User(signUpRequest.getUsername(),
+//                signUpRequest.getEmail(),
+//                encoder.encode(signUpRequest.getPassword()));
+//
+//        Set<String> strRoles = signUpRequest.getRole();
+//        Role role;
+//
+//        if (strRoles == null || strRoles.isEmpty()) {
+//            role = roleRepository.findByRoleName(AppRole.ROLE_USER)
+//                    .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+//        } else {
+//            String roleStr = strRoles.iterator().next();
+//            if (roleStr.equals("admin")) {
+//                role = roleRepository.findByRoleName(AppRole.ROLE_ADMIN)
+//                        .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+//            } else {
+//                role = roleRepository.findByRoleName(AppRole.ROLE_USER)
+//                        .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+//            }
+//
+//            user.setAccountNonLocked(true);
+//            user.setAccountNonExpired(true);
+//            user.setCredentialsNonExpired(true);
+//            user.setEnabled(true);
+//            user.setCredentialsExpiryDate(LocalDate.now().plusYears(1));
+//            user.setAccountExpiryDate(LocalDate.now().plusYears(1));
+//            user.setTwoFactorEnabled(false);
+//            user.setSignUpMethod("email");
+//        }
+//        user.setRole(role);
+//        userRepository.save(user);
+//
+//        return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
+//    }
+
+
     @PostMapping("/public/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
+        // 1. Validation checks
         if (userRepository.existsByUserName(signUpRequest.getUsername())) {
             return ResponseEntity.badRequest().body(new MessageResponse("Error: Username is already taken!"));
         }
-
         if (userRepository.existsByEmail(signUpRequest.getEmail())) {
             return ResponseEntity.badRequest().body(new MessageResponse("Error: Email is already in use!"));
         }
 
-        // Create new user's account
+        // 2. Create User object (Auth info)
         User user = new User(signUpRequest.getUsername(),
                 signUpRequest.getEmail(),
                 encoder.encode(signUpRequest.getPassword()));
 
+        // 3. Determine Role and Map Profile Data
         Set<String> strRoles = signUpRequest.getRole();
+        String roleName = (strRoles == null || strRoles.isEmpty()) ? "user" : strRoles.iterator().next();
         Role role;
 
-        if (strRoles == null || strRoles.isEmpty()) {
-            role = roleRepository.findByRoleName(AppRole.ROLE_USER)
+        if (roleName.equalsIgnoreCase("admin")) {
+            role = roleRepository.findByRoleName(AppRole.ROLE_ADMIN)
                     .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
-        } else {
-            String roleStr = strRoles.iterator().next();
-            if (roleStr.equals("admin")) {
-                role = roleRepository.findByRoleName(AppRole.ROLE_ADMIN)
-                        .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
-            } else {
-                role = roleRepository.findByRoleName(AppRole.ROLE_USER)
-                        .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
-            }
 
-            user.setAccountNonLocked(true);
-            user.setAccountNonExpired(true);
-            user.setCredentialsNonExpired(true);
-            user.setEnabled(true);
-            user.setCredentialsExpiryDate(LocalDate.now().plusYears(1));
-            user.setAccountExpiryDate(LocalDate.now().plusYears(1));
-            user.setTwoFactorEnabled(false);
-            user.setSignUpMethod("email");
+            AdminProfile adminProfile = new AdminProfile();
+            adminProfile.setUser(user);
+            // Map common fields from request to BaseProfile inheritance
+            mapBaseProfileData(adminProfile, signUpRequest);
+
+            user.setAdminProfile(adminProfile);
+
+        } else {
+            role = roleRepository.findByRoleName(AppRole.ROLE_STUDENT)
+                    .orElseThrow(() -> new RuntimeException("Error: Role is not found."));
+
+            StudentProfile studentProfile = new StudentProfile();
+            studentProfile.setUser(user);
+            // Map common fields
+            mapBaseProfileData(studentProfile, signUpRequest);
+
+            // Map Student-specific fields
+            studentProfile.setTransport(AppTransport.Walker); // Default or from request
+            studentProfile.setBloodGroup(signUpRequest.getBloodGroup());
+
+            user.setStudentProfile(studentProfile);
         }
+
+        // 4. Set User metadata
         user.setRole(role);
+        configureUserAccountDefaults(user);
+
+        // 5. Save (Cascades to the specific profile automatically)
         userRepository.save(user);
 
-        return ResponseEntity.ok(new MessageResponse("User registered successfully!"));
+        return ResponseEntity.ok(new MessageResponse("User and " + roleName + " profile registered successfully!"));
+    }
+
+    /**
+     * Helper method to avoid code duplication for common profile fields
+     */
+    private void mapBaseProfileData(BaseProfile profile, SignupRequest request) {
+        profile.setDob(request.getDob());
+        profile.setPhone(request.getPhone());
+        profile.setAddress(request.getAddress());
+        profile.setMedicalIssue(request.getMedicalIssue());
+        profile.setDisability(request.getDisability());
+        profile.setAllergy(request.getAllergy());
+        profile.setParentA(request.getParentA());
+        profile.setParentB(request.getParentB());
+        profile.setParentAContact(request.getParentAContact());
+        profile.setParentBContact(request.getParentBContact());
+    }
+
+    private void configureUserAccountDefaults(User user) {
+        user.setAccountNonLocked(true);
+        user.setAccountNonExpired(true);
+        user.setCredentialsNonExpired(true);
+        user.setEnabled(true);
+        user.setCredentialsExpiryDate(LocalDate.now().plusYears(1));
+        user.setAccountExpiryDate(LocalDate.now().plusYears(1));
+        user.setTwoFactorEnabled(false);
+        user.setSignUpMethod("email");
     }
 
     @GetMapping("/user")
